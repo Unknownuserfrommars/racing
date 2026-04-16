@@ -101,6 +101,14 @@ export async function submitRun(run) {
   }
 
   const runs = loadLocalRuns(run.map_id);
+  const existingBest = runs
+    .filter((entry) => entry.player_id === run.player_id)
+    .sort((a, b) => a.time_ms - b.time_ms)[0];
+
+  if (existingBest && run.time_ms >= existingBest.time_ms) {
+    return onlyBestPerPlayer(runs).slice(0, 20);
+  }
+
   const filtered = runs.filter((entry) => entry.player_id !== run.player_id);
   filtered.push(run);
   const ranked = onlyBestPerPlayer(filtered);

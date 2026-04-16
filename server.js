@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename);
 loadEnvFromFile(path.join(__dirname, '.env.local'));
 
 const PORT = Number(process.env.PORT || 4173);
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+const SUPABASE_KEY = (process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '').trim();
 const LOCAL_RUNS = new Map();
 
 function loadEnvFromFile(filePath) {
@@ -48,6 +48,51 @@ function top20WithReplayRule(runs) {
     ...run,
     replay: idx < 20 ? run.replay || null : null,
   }));
+}
+
+const RUN_VALIDATION = {
+  minTimeMs: 3000,
+  maxTimeMs: 30 * 60 * 1000,
+  maxSpeedPxPerSec: 650,
+  minReplayFrames: 15,
+};
+
+function validateRunPayload(run) {
+  if (!run?.map_id || typeof run.map_id !== 'string') return 'map_id is required';
+  if (!run?.player_id || typeof run.player_id !== 'string') return 'player_id is required';
+  if (!Number.isFinite(run?.time_ms)) return 'time_ms must be finite';
+  if (run.time_ms < RUN_VALIDATION.minTimeMs || run.time_ms > RUN_VALIDATION.maxTimeMs) {
+    return 'time_ms outside allowed bounds';
+  }
+
+  if (!Array.isArray(run.replay) || run.replay.length < RUN_VALIDATION.minReplayFrames) {
+    return 'replay is missing or too short';
+  }
+
+  let prev = null;
+  for (const frame of run.replay) {
+    if (!Number.isFinite(frame?.t) || !Number.isFinite(frame?.x) || !Number.isFinite(frame?.y)) {
+      return 'replay frame is invalid';
+    }
+    if (prev) {
+      const dt = frame.t - prev.t;
+      if (dt <= 0) return 'replay timestamps must increase';
+      const dx = frame.x - prev.x;
+      const dy = frame.y - prev.y;
+      const speed = (Math.hypot(dx, dy) / dt) * 1000;
+      if (speed > RUN_VALIDATION.maxSpeedPxPerSec) {
+        return 'replay speed exceeds allowed limit';
+      }
+    }
+    prev = frame;
+  }
+
+  const replayDuration = run.replay[run.replay.length - 1].t;
+  if (Math.abs(replayDuration - run.time_ms) > 500) {
+    return 'replay duration does not match run time';
+  }
+
+  return null;
 }
 
 async function supabaseFetch(pathname, options = {}) {
@@ -130,8 +175,9 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname === '/api/submit-run' && req.method === 'POST') {
       const run = await readBody(req);
-      if (!run?.map_id || !run?.player_id || !Number.isFinite(run?.time_ms)) {
-        return json(res, 400, { error: 'invalid run payload' });
+      const validationError = validateRunPayload(run);
+      if (validationError) {
+        return json(res, 400, { error: validationError });
       }
       const runs = await submitRun(run);
       return json(res, 200, { runs });

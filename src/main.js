@@ -76,22 +76,25 @@ retryBtn.addEventListener('click', () => {
 
 async function trySubmitLap() {
   const displayName = ensureName();
-  if (!displayName || !game.validateRun()) {
-    return;
+  const shouldSubmit = Boolean(displayName && game.validateRun());
+
+  if (shouldSubmit) {
+    const run = {
+      player_id: playerId,
+      display_name: displayName,
+      map_id: mapId,
+      time_ms: game.timeMs,
+      replay: game.replay,
+      created_at: new Date().toISOString(),
+      is_valid: true
+    };
+
+    leaderboard = await submitRun(run);
+    renderLeaderboard();
   }
 
-  const run = {
-    player_id: playerId,
-    display_name: displayName,
-    map_id: mapId,
-    time_ms: game.timeMs,
-    replay: game.replay,
-    created_at: new Date().toISOString(),
-    is_valid: true
-  };
-
-  leaderboard = await submitRun(run);
-  renderLeaderboard();
+  game.reset();
+  timerEl.textContent = '00:00.000';
 }
 
 function tick(now) {
