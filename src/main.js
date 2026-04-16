@@ -1,5 +1,5 @@
 import { RacerGame } from './game.js';
-import { fetchLeaderboard, submitRun, usingSupabase } from './leaderboard.js';
+import { fetchLeaderboard, leaderboardModeLabel, submitRun, usingSupabase } from './leaderboard.js';
 import { getDisplayName, getOrCreatePlayerId, setDisplayName } from './player.js';
 import { formatMs, todayMapId } from './utils.js';
 
@@ -39,7 +39,7 @@ function renderLeaderboard() {
     bestTimeEl.textContent = formatMs(bestTime);
   }
 
-  const mode = usingSupabase() ? 'Supabase mode' : 'Local-only mode (configure Supabase in src/config.js later)';
+  const mode = usingSupabase() ? 'Supabase mode' : leaderboardModeLabel();
   leaderboardStateEl.textContent = `${mode}. Entries: ${leaderboard.length}`;
   bestReplay = leaderboard[0]?.replay || null;
 }

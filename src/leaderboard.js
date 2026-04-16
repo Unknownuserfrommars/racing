@@ -1,4 +1,6 @@
-import { STORAGE_KEYS, SUPABASE_CONFIG } from './config.js';
+import { API_CONFIG, STORAGE_KEYS } from './config.js';
+
+let backendMode = 'node-api';
 
 function localKey(mapId) {
   return `${STORAGE_KEYS.localRunsPrefix}${mapId}`;
@@ -23,24 +25,72 @@ function onlyBestPerPlayer(runs) {
   return [...byPlayer.values()].sort((a, b) => a.time_ms - b.time_ms);
 }
 
+function apiUrl(path) {
+  return `${API_CONFIG.baseUrl}${path}`;
+}
+
+async function checkBackendMode() {
+  try {
+    const response = await fetch(apiUrl('/api/health'));
+    if (!response.ok) throw new Error('health check failed');
+    const data = await response.json();
+    backendMode = data.mode === 'supabase' ? 'supabase' : 'node-api';
+  } catch {
+    backendMode = 'local-fallback';
+  }
+}
+
 export function usingSupabase() {
-  return Boolean(SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey);
+  return backendMode === 'supabase';
 }
 
 export async function fetchLeaderboard(mapId) {
-  // Placeholder until Supabase details are available.
+  try {
+    if (backendMode === 'node-api') {
+      await checkBackendMode();
+    }
+    if (backendMode === 'supabase' || backendMode === 'node-api') {
+      const response = await fetch(apiUrl(`/api/leaderboard?mapId=${encodeURIComponent(mapId)}`));
+      if (!response.ok) {
+        throw new Error('Failed leaderboard API request');
+      }
+      const data = await response.json();
+      return data.runs || [];
+    }
+  } catch {
+    backendMode = 'local-fallback';
+  }
+
   const runs = loadLocalRuns(mapId);
   return onlyBestPerPlayer(runs).slice(0, 20);
 }
 
 export async function submitRun(run) {
-  // Local fallback implementation keeps MVP moving without backend credentials.
+  if (backendMode === 'node-api') {
+    await checkBackendMode();
+  }
+
+  if (backendMode === 'supabase' || backendMode === 'node-api') {
+    try {
+      const response = await fetch(apiUrl('/api/submit-run'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(run)
+      });
+      if (!response.ok) {
+        throw new Error('Failed submit API request');
+      }
+      const data = await response.json();
+      return data.runs || [];
+    } catch {
+      backendMode = 'local-fallback';
+    }
+  }
+
   const runs = loadLocalRuns(run.map_id);
   const filtered = runs.filter((entry) => entry.player_id !== run.player_id);
   filtered.push(run);
   const ranked = onlyBestPerPlayer(filtered);
-
-  // Keep replay only for top 20 in local storage model.
   ranked.forEach((entry, idx) => {
     if (idx >= 20) {
       entry.replay = null;
@@ -49,4 +99,10 @@ export async function submitRun(run) {
 
   saveLocalRuns(run.map_id, ranked);
   return ranked.slice(0, 20);
+}
+
+export function leaderboardModeLabel() {
+  if (backendMode === 'supabase') return 'Supabase via Node API';
+  if (backendMode === 'node-api') return 'Node API mode';
+  return 'Local fallback mode';
 }

@@ -4,9 +4,8 @@ export const STORAGE_KEYS = {
   localRunsPrefix: 'daily-racer-runs-'
 };
 
-// Set these only after you create your Supabase project.
-// Keeping null means local-only fallback mode.
-export const SUPABASE_CONFIG = {
-  url: null,
-  anonKey: null
+// Frontend talks to Node API by default.
+// Keep empty string for same-origin requests (recommended).
+export const API_CONFIG = {
+  baseUrl: ''
 };
