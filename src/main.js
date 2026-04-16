@@ -36,8 +36,9 @@ function renderLeaderboard() {
   const personalBest = leaderboard.find((entry) => entry.player_id === playerId);
   if (personalBest) {
     bestTime = personalBest.time_ms;
-    bestTimeEl.textContent = formatMs(bestTime);
   }
+
+  bestTimeEl.textContent = Number.isFinite(bestTime) ? formatMs(bestTime) : '--';
 
   const mode = usingSupabase() ? 'Supabase mode' : leaderboardModeLabel();
   leaderboardStateEl.textContent = `${mode}. Entries: ${leaderboard.length}`;
@@ -90,6 +91,9 @@ async function trySubmitLap() {
     };
 
     leaderboard = await submitRun(run);
+    if (run.time_ms < bestTime) {
+      bestTime = run.time_ms;
+    }
     renderLeaderboard();
   }
 

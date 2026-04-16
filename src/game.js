@@ -114,9 +114,24 @@ export class RacerGame {
     });
 
     if (ghostEnabled && ghostReplay?.length) {
-      const keyframe = ghostReplay[Math.min(ghostReplay.length - 1, this.replay.length - 1)] || ghostReplay[0];
-      if (keyframe) {
-        this.drawCar(keyframe.x, keyframe.y, keyframe.a, '#96b6ff77');
+      const frameIdx = ghostReplay.findIndex((frame) => frame.t >= this.timeMs);
+      const ghostFrameIndex = frameIdx === -1 ? ghostReplay.length - 1 : frameIdx;
+      const ghostFrame = ghostReplay[ghostFrameIndex] || ghostReplay[0];
+
+      this.ctx.strokeStyle = '#96b6ff55';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      ghostReplay.slice(0, ghostFrameIndex + 1).forEach((frame, idx) => {
+        if (idx === 0) {
+          this.ctx.moveTo(frame.x, frame.y);
+        } else {
+          this.ctx.lineTo(frame.x, frame.y);
+        }
+      });
+      this.ctx.stroke();
+
+      if (ghostFrame) {
+        this.drawCar(ghostFrame.x, ghostFrame.y, ghostFrame.a, '#96b6ffaa');
       }
     }
 

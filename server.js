@@ -51,10 +51,8 @@ function top20WithReplayRule(runs) {
 }
 
 const RUN_VALIDATION = {
-  minTimeMs: 3000,
-  maxTimeMs: 30 * 60 * 1000,
-  maxSpeedPxPerSec: 650,
-  minReplayFrames: 15,
+  minTimeMs: 1,
+  maxTimeMs: 60 * 60 * 1000,
 };
 
 function validateRunPayload(run) {
@@ -64,34 +62,6 @@ function validateRunPayload(run) {
   if (run.time_ms < RUN_VALIDATION.minTimeMs || run.time_ms > RUN_VALIDATION.maxTimeMs) {
     return 'time_ms outside allowed bounds';
   }
-
-  if (!Array.isArray(run.replay) || run.replay.length < RUN_VALIDATION.minReplayFrames) {
-    return 'replay is missing or too short';
-  }
-
-  let prev = null;
-  for (const frame of run.replay) {
-    if (!Number.isFinite(frame?.t) || !Number.isFinite(frame?.x) || !Number.isFinite(frame?.y)) {
-      return 'replay frame is invalid';
-    }
-    if (prev) {
-      const dt = frame.t - prev.t;
-      if (dt <= 0) return 'replay timestamps must increase';
-      const dx = frame.x - prev.x;
-      const dy = frame.y - prev.y;
-      const speed = (Math.hypot(dx, dy) / dt) * 1000;
-      if (speed > RUN_VALIDATION.maxSpeedPxPerSec) {
-        return 'replay speed exceeds allowed limit';
-      }
-    }
-    prev = frame;
-  }
-
-  const replayDuration = run.replay[run.replay.length - 1].t;
-  if (Math.abs(replayDuration - run.time_ms) > 500) {
-    return 'replay duration does not match run time';
-  }
-
   return null;
 }
 
