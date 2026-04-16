@@ -1,6 +1,9 @@
 import { API_CONFIG, STORAGE_KEYS } from './config.js';
 
-let backendMode = 'node-api';
+const runningOnLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const hasExplicitApiBase = Boolean(API_CONFIG.baseUrl);
+
+let backendMode = runningOnLocalhost || hasExplicitApiBase ? 'node-api' : 'local-fallback';
 
 function localKey(mapId) {
   return `${STORAGE_KEYS.localRunsPrefix}${mapId}`;
@@ -29,7 +32,17 @@ function apiUrl(path) {
   return `${API_CONFIG.baseUrl}${path}`;
 }
 
+
+function shouldUseNodeApi() {
+  return runningOnLocalhost || hasExplicitApiBase;
+}
+
 async function checkBackendMode() {
+  if (!shouldUseNodeApi()) {
+    backendMode = 'local-fallback';
+    return;
+  }
+
   try {
     const response = await fetch(apiUrl('/api/health'));
     if (!response.ok) throw new Error('health check failed');

@@ -9,6 +9,13 @@ body {
   color: #edf0ff;
 }
 
+
+h6 {
+  margin: 0.25rem 0 0.5rem;
+  color: #8e96ba;
+  font-weight: 600;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 2fr 1fr;
