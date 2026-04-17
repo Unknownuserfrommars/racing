@@ -1,78 +1,77 @@
-# Daily Browser Racer
+# Daily Browser Racer (Streamlit)
 
-Daily Browser Racer is a lightweight arcade racing game that runs directly in the browser.
-Players race a daily map, finish a lap, and submit their best time to a top-20 leaderboard.
+Daily Browser Racer is now a **Python + Streamlit** application with a Supabase-backed daily leaderboard.
 
-## Project overview
+## What changed
 
-- **Frontend gameplay loop** rendered on an HTML5 canvas.
-- **Daily track identity** generated from the current date.
-- **Ghost replay support** for the current leaderboard-best run.
-- **Leaderboard deduplication by player** (best run per player is kept).
-- **Two backend modes**:
-  - **Supabase via Node API** (recommended for shared online leaderboard)
-  - **Local in-memory fallback** (works without Supabase)
+- Removed the Node.js/GitHub Pages-oriented workflow.
+- Moved the app entrypoint to `app.py`.
+- Leaderboard reads/writes directly to Supabase using `st.connection()` + `st-supabase-connection`.
+- Daily map identity is still based on the current UTC date (`YYYY-MM-DD-track`).
 
-## How it works
+## Supabase schema
 
-1. The client initializes the racer and derives today’s map id.
-2. Leaderboard data is fetched for that map.
-3. When a lap is completed, the run is validated and submitted.
-4. The server/client ranking logic keeps the fastest run per player and shows the top 20.
+The app expects the `runs` table:
 
-## Run locally
+```sql
+CREATE TABLE runs (
+    id BIGSERIAL PRIMARY KEY,
+    player_id TEXT,
+    display_name TEXT,
+    map_id TEXT,
+    time_ms INTEGER,
+    replay_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-### Prerequisites
+ALTER TABLE runs ENABLE ROW LEVEL SECURITY;
 
-- Node.js 18+
-- npm
+CREATE POLICY "allow all inserts"
+ON runs
+FOR INSERT
+TO anon
+WITH CHECK (true);
 
-### Install
+CREATE POLICY "allow all selects"
+ON runs
+FOR SELECT
+TO anon
+USING (true);
+```
+
+## Local setup
+
+### 1) Install dependencies
 
 ```bash
-npm install
+pip install -r requirements.txt
 ```
 
-### Start the game (Node API mode)
+### 2) Configure Streamlit secrets
+
+Create `.streamlit/secrets.toml` in the repo root:
+
+```toml
+SUPABASE_URL = "https://lywbtrnhkazekyljhkft.supabase.co"
+SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY"
+
+[connections.supabase]
+SUPABASE_URL = "https://lywbtrnhkazekyljhkft.supabase.co"
+SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY"
+```
+
+> Keep secrets local only. Do **not** commit this file.
+
+### 3) Run the app
 
 ```bash
-npm start
+streamlit run app.py
 ```
 
-Open `http://localhost:4173`.
+## App behavior
 
-## Environment configuration
-
-Create `.env.local` (do not commit) if you want Supabase-backed leaderboards:
-
-```env
-SUPABASE_URL=YOUR_SUPABASE_URL
-SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
-```
-
-Client-side Next-style variables are also supported:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
-```
-
-If env vars are missing, the app falls back to local in-memory leaderboard behavior.
-
-## Available scripts
-
-- `npm start` — run the Node server (`server.js`)
-- `npm run next:build` — build Next.js output
-- `npm run next:export` — export static output
-
-## Controls
-
-- **W / S**: throttle / brake
-- **A / D**: steer
-- **Retry button**: restart current attempt
-- **Ghost toggle**: show/hide ghost replay
-
-## Current version labels
-
-- Package version: `0.1.3`
-- UI alpha label: `v0.2.1.019`
+- Generates/keeps a local player id in Streamlit session state.
+- Lets players enter a display name.
+- Uses a stopwatch flow (`Start run` → `Finish run`) to capture run time.
+- Rejects runs shorter than 3 seconds.
+- Submits to Supabase and renders a top-20 leaderboard with one best run per player.
