@@ -87,7 +87,7 @@ async function fetchLeaderboard(mapId) {
     return top20WithReplayRule(LOCAL_RUNS.get(mapId) || []);
   }
 
-  const query = `runs?map_id=eq.${encodeURIComponent(mapId)}&select=player_id,display_name,map_id,time_ms,replay,created_at,is_valid&order=time_ms.asc&limit=200`;
+  const query = `runs?map_id=eq.${encodeURIComponent(mapId)}&select=player_id,display_name,map_id,time_ms,replay,created_at,is_valid&order=time_ms.asc`;
   const runs = await supabaseFetch(query, { method: 'GET' });
   return top20WithReplayRule(runs || []);
 }

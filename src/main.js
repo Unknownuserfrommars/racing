@@ -110,7 +110,6 @@ function tick(now) {
   game.draw(bestReplay, ghostToggle.checked);
 
   if (game.finishedLap) {
-    game.finishedLap = false;
     trySubmitLap();
   }
 
