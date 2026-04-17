@@ -10,6 +10,7 @@ import streamlit as st
 from st_supabase_connection import SupabaseConnection
 
 APP_VERSION = "v1.0.0-streamlit"
+PLAYER_ID_QUERY_PARAM = "player_id"
 
 
 def format_ms(ms: int) -> str:
@@ -24,9 +25,24 @@ def today_map_id() -> str:
 
 
 def get_player_id() -> str:
-    if "player_id" not in st.session_state:
-        st.session_state.player_id = str(uuid.uuid4())
-    return st.session_state.player_id
+    session_player_id = st.session_state.get("player_id")
+    if session_player_id:
+        st.query_params[PLAYER_ID_QUERY_PARAM] = session_player_id
+        return session_player_id
+
+    query_player_id = str(st.query_params.get(PLAYER_ID_QUERY_PARAM, "")).strip()
+    if query_player_id:
+        try:
+            stable_player_id = str(uuid.UUID(query_player_id))
+            st.session_state.player_id = stable_player_id
+            return stable_player_id
+        except ValueError:
+            pass
+
+    generated_player_id = str(uuid.uuid4())
+    st.session_state.player_id = generated_player_id
+    st.query_params[PLAYER_ID_QUERY_PARAM] = generated_player_id
+    return generated_player_id
 
 
 def dedupe_best_per_player(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -54,7 +70,6 @@ def fetch_leaderboard(map_id: str) -> list[dict[str, Any]]:
         .select("id,player_id,display_name,map_id,time_ms,replay_data,created_at")
         .eq("map_id", map_id)
         .order("time_ms", desc=False)
-        .limit(500)
         .execute()
     )
     rows = response.data or []
