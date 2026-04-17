@@ -24,6 +24,7 @@ let leaderboard = [];
 let bestReplay = null;
 let bestTime = Number.POSITIVE_INFINITY;
 let prev = performance.now();
+let isSubmittingLap = false;
 
 function renderLeaderboard() {
   leaderboardEl.innerHTML = '';
@@ -76,29 +77,33 @@ retryBtn.addEventListener('click', () => {
 });
 
 async function trySubmitLap() {
-  const displayName = ensureName();
-  const shouldSubmit = Boolean(displayName && game.validateRun());
+  try {
+    const displayName = ensureName();
+    const shouldSubmit = Boolean(displayName && game.validateRun());
 
-  if (shouldSubmit) {
-    const run = {
-      player_id: playerId,
-      display_name: displayName,
-      map_id: mapId,
-      time_ms: game.timeMs,
-      replay: game.replay,
-      created_at: new Date().toISOString(),
-      is_valid: true
-    };
+    if (shouldSubmit) {
+      const run = {
+        player_id: playerId,
+        display_name: displayName,
+        map_id: mapId,
+        time_ms: game.timeMs,
+        replay: game.replay,
+        created_at: new Date().toISOString(),
+        is_valid: true
+      };
 
-    leaderboard = await submitRun(run);
-    if (run.time_ms < bestTime) {
-      bestTime = run.time_ms;
+      leaderboard = await submitRun(run);
+      if (run.time_ms < bestTime) {
+        bestTime = run.time_ms;
+      }
+      renderLeaderboard();
     }
-    renderLeaderboard();
-  }
 
-  game.reset();
-  timerEl.textContent = '00:00.000';
+    game.reset();
+    timerEl.textContent = '00:00.000';
+  } finally {
+    isSubmittingLap = false;
+  }
 }
 
 function tick(now) {
@@ -109,7 +114,8 @@ function tick(now) {
   timerEl.textContent = formatMs(game.timeMs);
   game.draw(bestReplay, ghostToggle.checked);
 
-  if (game.finishedLap) {
+  if (game.finishedLap && !isSubmittingLap) {
+    isSubmittingLap = true;
     trySubmitLap();
   }
 
