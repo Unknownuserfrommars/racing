@@ -7,9 +7,12 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from st_supabase_connection import SupabaseConnection
 
 APP_VERSION = "v1.0.0-streamlit"
+PLAYER_ID_COOKIE = "racing_player_id"
+PLAYER_ID_LOCAL_STORAGE_KEY = "racing_player_id"
 
 
 def format_ms(ms: int) -> str:
@@ -23,10 +26,49 @@ def today_map_id() -> str:
     return f"{datetime.now(timezone.utc).date().isoformat()}-track"
 
 
+def normalize_uuid(candidate: str | None) -> str | None:
+    if not candidate:
+        return None
+    try:
+        return str(uuid.UUID(str(candidate).strip()))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def get_player_id() -> str:
-    if "player_id" not in st.session_state:
-        st.session_state.player_id = str(uuid.uuid4())
-    return st.session_state.player_id
+    cookie_player_id = normalize_uuid(st.context.cookies.get(PLAYER_ID_COOKIE))
+    if cookie_player_id:
+        st.session_state.player_id = cookie_player_id
+        return cookie_player_id
+
+    session_player_id = normalize_uuid(st.session_state.get("player_id"))
+    if session_player_id:
+        st.session_state.player_id = session_player_id
+        return session_player_id
+
+    generated_player_id = str(uuid.uuid4())
+    st.session_state.player_id = generated_player_id
+    return generated_player_id
+
+
+def sync_player_id_client_storage(player_id: str) -> None:
+    components.html(
+        f"""
+        <script>
+          (() => {{
+            const playerId = {player_id!r};
+            const storageKey = {PLAYER_ID_LOCAL_STORAGE_KEY!r};
+            const cookieKey = {PLAYER_ID_COOKIE!r};
+            const uuidPattern = /^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[1-5][0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/i;
+            const fromStorage = window.localStorage.getItem(storageKey);
+            const stableId = uuidPattern.test(fromStorage || "") ? fromStorage : playerId;
+            window.localStorage.setItem(storageKey, stableId);
+            document.cookie = `${{cookieKey}}=${{stableId}}; path=/; max-age=315360000; samesite=lax`;
+          }})();
+        </script>
+        """,
+        height=0,
+    )
 
 
 def dedupe_best_per_player(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -54,7 +96,6 @@ def fetch_leaderboard(map_id: str) -> list[dict[str, Any]]:
         .select("id,player_id,display_name,map_id,time_ms,replay_data,created_at")
         .eq("map_id", map_id)
         .order("time_ms", desc=False)
-        .limit(500)
         .execute()
     )
     rows = response.data or []
@@ -88,12 +129,12 @@ def run_stopwatch() -> int | None:
 
     col1, col2, _ = st.columns([1, 1, 2])
     with col1:
-        if st.button("Start run", use_container_width=True):
+        if st.button("Start run", width="stretch"):
             st.session_state.run_started_at = time.perf_counter()
             st.session_state.last_run_ms = None
             st.session_state.last_run_token = None
     with col2:
-        if st.button("Finish run", use_container_width=True):
+        if st.button("Finish run", width="stretch"):
             started_at = st.session_state.run_started_at
             if started_at is not None:
                 elapsed_ms = int((time.perf_counter() - started_at) * 1000)
@@ -120,6 +161,7 @@ def main() -> None:
 
     map_id = today_map_id()
     player_id = get_player_id()
+    sync_player_id_client_storage(player_id)
 
     with st.sidebar:
         st.subheader("Driver profile")
@@ -136,6 +178,12 @@ def main() -> None:
     run_token = st.session_state.get("last_run_token")
     already_submitted = bool(run_token and run_token in st.session_state.submitted_run_tokens)
     can_submit = bool(display_name.strip() and last_run_ms is not None and not already_submitted)
+    if not display_name.strip():
+        st.caption('Please enter "Display name" before submitting your result.')
+    elif last_run_ms is None:
+        st.caption('Please click "Start run" and "Finish run" before submitting.')
+    elif already_submitted:
+        st.caption("This run has already been submitted. Record a new run to submit again.")
     if st.button("Submit run", type="primary", disabled=not can_submit):
         submit_run(map_id=map_id, display_name=display_name, time_ms=last_run_ms)
         if run_token:
@@ -165,7 +213,7 @@ def main() -> None:
         }
     )
 
-    st.dataframe(leaderboard_view, use_container_width=True, hide_index=True)
+    st.dataframe(leaderboard_view, width="stretch", hide_index=True)
 
 
 if __name__ == "__main__":
