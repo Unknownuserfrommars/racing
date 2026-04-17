@@ -1,48 +1,78 @@
 # Daily Browser Racer
 
-This repo now includes **two runnable modes**:
+Daily Browser Racer is a lightweight arcade racing game that runs directly in the browser.
+Players race a daily map, finish a lap, and submit their best time to a top-20 leaderboard.
 
-1. **Static Next.js export (GitHub Pages-friendly)**
-2. **Node API mode (local backend APIs for leaderboard submit/fetch)**
+## Project overview
 
-## 1) Next.js static export (for GitHub Pages)
+- **Frontend gameplay loop** rendered on an HTML5 canvas.
+- **Daily track identity** generated from the current date.
+- **Ghost replay support** for the current leaderboard-best run.
+- **Leaderboard deduplication by player** (best run per player is kept).
+- **Two backend modes**:
+  - **Supabase via Node API** (recommended for shared online leaderboard)
+  - **Local in-memory fallback** (works without Supabase)
 
-Install dependencies:
+## How it works
+
+1. The client initializes the racer and derives today’s map id.
+2. Leaderboard data is fetched for that map.
+3. When a lap is completed, the run is validated and submitted.
+4. The server/client ranking logic keeps the fastest run per player and shows the top 20.
+
+## Run locally
+
+### Prerequisites
+
+- Node.js 18+
+- npm
+
+### Install
 
 ```bash
 npm install
 ```
 
-Set `.env.local` (local only, do not commit):
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://lywbtrnhkazekyljhkft.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_a8bSpkh5ZdK1v2NNmodz1A_RfzAPN5P
-```
-
-Build static output:
-
-```bash
-npm run next:build
-npm run next:export
-```
-
-`next.config.js` uses `output: 'export'` so the app is generated as static output for GitHub Pages.
-
-## 2) Node API mode (local development)
-
-Run the local Node server:
+### Start the game (Node API mode)
 
 ```bash
 npm start
 ```
 
-Then open:
+Open `http://localhost:4173`.
 
-- `http://localhost:4173`
+## Environment configuration
 
-## Notes
+Create `.env.local` (do not commit) if you want Supabase-backed leaderboards:
 
-- `.env.local` is ignored by git in `.gitignore`.
-- Next.js middleware/proxy and API routes are not active on fully static hosting.
-- Supabase helpers are included under `utils/supabase/*` for Next.js integration.
+```env
+SUPABASE_URL=YOUR_SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+```
+
+Client-side Next-style variables are also supported:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+```
+
+If env vars are missing, the app falls back to local in-memory leaderboard behavior.
+
+## Available scripts
+
+- `npm start` — run the Node server (`server.js`)
+- `npm run next:build` — build Next.js output
+- `npm run next:export` — export static output
+
+## Controls
+
+- **W / S**: throttle / brake
+- **A / D**: steer
+- **Retry button**: restart current attempt
+- **Ghost toggle**: show/hide ghost replay
+
+## Current version labels
+
+- Package version: `0.1.3`
+- UI alpha label: `v0.2.1.019`
