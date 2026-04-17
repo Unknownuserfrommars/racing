@@ -1,5 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Local environment
+.DS_Store
+.streamlit/secrets.toml
+
+# Legacy Node artifacts (if present locally)
 node_modules/
 .env.local
-.DS_Store
 .next/
 out/
