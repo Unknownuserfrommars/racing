@@ -102,6 +102,7 @@ def fetch_leaderboard(map_id: str) -> list[dict[str, Any]]:
     return dedupe_best_per_player(rows)[:20]
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def fetch_history(limit: int = 200) -> list[dict[str, Any]]:
     conn = get_conn()
     response = (
@@ -113,6 +114,15 @@ def fetch_history(limit: int = 200) -> list[dict[str, Any]]:
         .execute()
     )
     return response.data or []
+
+
+def safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def submit_run(map_id: str, display_name: str, time_ms: int) -> None:
@@ -232,24 +242,30 @@ def main() -> None:
     st.caption("Daily top runs archived by the cron job.")
 
     if st.button("Refresh history"):
-        st.cache_data.clear()
+        fetch_history.clear()
 
     history_rows = fetch_history()
     if not history_rows:
         st.info("No history records yet.")
         return
 
-    history_view = pd.DataFrame(
-        {
-            "Map (day)": [row.get("map_id", "") for row in history_rows],
-            "Rank": [int(row.get("rank", 0)) for row in history_rows],
-            "Driver": [row.get("display_name", "Unknown") for row in history_rows],
-            "Time": [format_ms(int(row.get("time_ms", 0))) for row in history_rows],
-            "Time (ms)": [int(row.get("time_ms", 0)) for row in history_rows],
-            "Player ID": [row.get("player_id", "") for row in history_rows],
-            "Archived at": [row.get("created_at", "") for row in history_rows],
-        }
-    )
+    history_view_rows: list[dict[str, Any]] = []
+    for row in history_rows:
+        rank = safe_int(row.get("rank"))
+        time_ms = safe_int(row.get("time_ms"))
+        history_view_rows.append(
+            {
+                "Map (day)": row.get("map_id", ""),
+                "Rank": rank if rank is not None else "—",
+                "Driver": row.get("display_name", "Unknown"),
+                "Time": format_ms(time_ms) if time_ms is not None else "—",
+                "Time (ms)": time_ms if time_ms is not None else "—",
+                "Player ID": row.get("player_id", ""),
+                "Archived at": row.get("created_at", ""),
+            }
+        )
+
+    history_view = pd.DataFrame(history_view_rows)
 
     st.dataframe(history_view, width="stretch", hide_index=True)
 
