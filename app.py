@@ -23,7 +23,7 @@ def format_ms(ms: int) -> str:
 
 
 def today_map_id() -> str:
-    return f"{datetime.now(timezone.utc).date().isoformat()}-track"
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def normalize_uuid(candidate: str | None) -> str | None:
@@ -100,6 +100,29 @@ def fetch_leaderboard(map_id: str) -> list[dict[str, Any]]:
     )
     rows = response.data or []
     return dedupe_best_per_player(rows)[:20]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_history(limit: int = 200) -> list[dict[str, Any]]:
+    conn = get_conn()
+    response = (
+        conn.client.table("history")
+        .select("player_id,display_name,map_id,time_ms,rank,created_at")
+        .order("map_id", desc=True)
+        .order("rank", desc=False)
+        .limit(limit)
+        .execute()
+    )
+    return response.data or []
+
+
+def safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def submit_run(map_id: str, display_name: str, time_ms: int) -> None:
@@ -201,19 +224,50 @@ def main() -> None:
     rows = fetch_leaderboard(map_id)
     if not rows:
         st.info("No runs submitted yet for today's map.")
+    else:
+        leaderboard_view = pd.DataFrame(
+            {
+                "Rank": list(range(1, len(rows) + 1)),
+                "Driver": [row.get("display_name", "Unknown") for row in rows],
+                "Time": [format_ms(int(row.get("time_ms", 0))) for row in rows],
+                "Time (ms)": [int(row.get("time_ms", 0)) for row in rows],
+                "Player ID": [row.get("player_id", "") for row in rows],
+            }
+        )
+
+        st.dataframe(leaderboard_view, width="stretch", hide_index=True)
+
+    st.markdown("---")
+    st.subheader("History")
+    st.caption("Daily top runs archived by the cron job.")
+
+    if st.button("Refresh history"):
+        fetch_history.clear()
+
+    history_rows = fetch_history()
+    if not history_rows:
+        st.info("No history records yet.")
         return
 
-    leaderboard_view = pd.DataFrame(
-        {
-            "Rank": list(range(1, len(rows) + 1)),
-            "Driver": [row.get("display_name", "Unknown") for row in rows],
-            "Time": [format_ms(int(row.get("time_ms", 0))) for row in rows],
-            "Time (ms)": [int(row.get("time_ms", 0)) for row in rows],
-            "Player ID": [row.get("player_id", "") for row in rows],
-        }
-    )
+    history_view_rows: list[dict[str, Any]] = []
+    for row in history_rows:
+        rank = safe_int(row.get("rank"))
+        time_ms = safe_int(row.get("time_ms"))
+        history_view_rows.append(
+            {
+                "Map (day)": row.get("map_id", ""),
+                "Rank": rank if rank is not None else "—",
+                "Driver": row.get("display_name", "Unknown"),
+                "Time": format_ms(time_ms) if time_ms is not None else "—",
+                "Time (ms)": time_ms if time_ms is not None else "—",
+                "Player ID": row.get("player_id", ""),
+                "Archived at": row.get("created_at", ""),
+            }
+        )
 
-    st.dataframe(leaderboard_view, width="stretch", hide_index=True)
+    history_view = pd.DataFrame(history_view_rows)
+
+    st.dataframe(history_view, width="stretch", hide_index=True)
 
 
 if __name__ == "__main__":
