@@ -60,10 +60,14 @@ def sync_player_id_client_storage(player_id: str) -> None:
             const storageKey = {PLAYER_ID_LOCAL_STORAGE_KEY!r};
             const cookieKey = {PLAYER_ID_COOKIE!r};
             const uuidPattern = /^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[1-5][0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/i;
-            const fromStorage = window.localStorage.getItem(storageKey);
+
+            const rootWindow = window.parent || window;
+            const storage = rootWindow.localStorage;
+            const fromStorage = storage.getItem(storageKey);
             const stableId = uuidPattern.test(fromStorage || "") ? fromStorage : playerId;
-            window.localStorage.setItem(storageKey, stableId);
-            document.cookie = `${{cookieKey}}=${{stableId}}; path=/; max-age=315360000; samesite=lax`;
+
+            storage.setItem(storageKey, stableId);
+            rootWindow.document.cookie = `${{cookieKey}}=${{stableId}}; path=/; max-age=315360000; samesite=lax`;
           }})();
         </script>
         """,
@@ -105,14 +109,17 @@ def fetch_leaderboard(map_id: str) -> list[dict[str, Any]]:
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_history(limit: int = 200) -> list[dict[str, Any]]:
     conn = get_conn()
-    response = (
-        conn.client.table("history")
-        .select("player_id,display_name,map_id,time_ms,rank,created_at")
-        .order("map_id", desc=True)
-        .order("rank", desc=False)
-        .limit(limit)
-        .execute()
-    )
+    try:
+        response = (
+            conn.client.table("history")
+            .select("player_id,display_name,map_id,time_ms,rank,created_at")
+            .order("map_id", desc=True)
+            .order("rank", desc=False)
+            .limit(limit)
+            .execute()
+        )
+    except Exception:
+        return []
     return response.data or []
 
 
