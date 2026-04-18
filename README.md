@@ -7,7 +7,7 @@ Daily Browser Racer is now a **Python + Streamlit** application with a Supabase-
 - Removed the Node.js/GitHub Pages-oriented workflow.
 - Moved the app entrypoint to `app.py`.
 - Leaderboard reads/writes directly to Supabase using `st.connection()` + `st-supabase-connection`.
-- Daily map identity is still based on the current UTC date (`YYYY-MM-DD-track`).
+- Daily map identity is based on the current UTC date (`YYYY-MM-DD`) so it matches the archive cron job.
 
 ## Supabase schema
 
@@ -34,6 +34,28 @@ WITH CHECK (true);
 
 CREATE POLICY "allow all selects"
 ON runs
+FOR SELECT
+TO anon
+USING (true);
+```
+
+To show archived daily results in the Streamlit frontend, also create a `history` table:
+
+```sql
+CREATE TABLE history (
+    id BIGSERIAL PRIMARY KEY,
+    player_id TEXT,
+    display_name TEXT,
+    map_id TEXT,
+    time_ms INTEGER,
+    rank INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "allow all history selects"
+ON history
 FOR SELECT
 TO anon
 USING (true);
@@ -73,5 +95,5 @@ streamlit run app.py
 - Generates/keeps a local player id in Streamlit session state.
 - Lets players enter a display name.
 - Uses a stopwatch flow (`Start run` → `Finish run`) to capture run time.
-- Rejects runs shorter than 3 seconds.
 - Submits to Supabase and renders a top-20 leaderboard with one best run per player.
+- Shows archived daily top runs from the `history` table.
